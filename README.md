@@ -1,1 +1,1 @@
-# FRI_One_Recylcle_Detection
+# FRI_One_Recycle_Detection
