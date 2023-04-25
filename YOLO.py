@@ -2,17 +2,20 @@ from ultralytics import YOLO
 from PIL import Image
 import cv2
 import os
-import openai
+# import openai
 
 model = YOLO("yolov8x-cls.pt")
+
+# **************** YOLO ON AN IMAGE ****************
 # accepts all formats - image/dir/Path/URL/video/PIL/ndarray. 0 for webcam
-# results = model.predict(source="0")
-# results = model.predict(source="folder", show=True) # Display preds. Accepts all YOLO predict arguments
+#results = model.predict(source="0")
+#results = model.predict(source="folder", show=True) # Display preds. Accepts all YOLO predict arguments
 
+# uncomment this block for image
+"""
 # from PIL
-im1 = Image.open("/home/bwilab/Wyatt_Aman_Sahir_John_FRI1/FRI_One_Recycle_Detection/testImages/plasticBag.png")
-results = model.predict(source=im1, save=False)  # save plotted images
-
+im1 = Image.open("/home/bwilab/group10_FRI_final/FRI_One_Recycle_Detection/testImages/attachments/water_bottle_img.jpg")
+# results = model.predict(source=im1, save=False)  # save plotted images
 
 # from list of PIL/ndarray
 results = model.predict(source=im1)
@@ -24,11 +27,52 @@ best_class_idx = results[0].probs.argmax()
 class_names = list(results[0].names.values())
 best_class_name = class_names[best_class_idx]
 
+print(f'this is a {best_class_name}')
+
 # print("class with highest confidence")
 # print(best_class_name)
 
 # print("all classes")
 # print(class_names)
+"""
+
+# **************** YOLO ON A VIDEO ****************
+# open a video
+cap = cv2.VideoCapture('/home/bwilab/group10_FRI_final/FRI_One_Recycle_Detection/testImages/attachments/water_bottle_vid.MOV')
+
+# retrieve the frame and whether or not it was successful in retrieval
+ret, frame = cap.read()
+counter = 1  # count which frame we are on
+
+framerate = 30  # frames per second of the video being read
+seconds = 3  # number of seconds between each reading
+
+# while there are frames in the video
+while ret:
+    # only read when we want too so we dont take too long
+    if counter == framerate * seconds:
+        # from list of PIL/ndarray
+        results = model.predict(source=frame)
+
+        # Find the index with the highest probability
+        best_class_idx = results[0].probs.argmax()
+
+        # Get the class name with the highest probability
+        class_names = list(results[0].names.values())
+        best_class_name = class_names[best_class_idx]
+    
+        # print the class name with the highest probability
+        print(f'\nThe class with the highest confidence right now is: {best_class_name}\n')
+        counter = 0  # reset the frame counter
+    
+    # retrieve next frame and bool
+    ret, frame = cap.read()
+    counter += 1  # increment counter
+
+# release the video and close all OpenCV windows
+cap.release()
+cv2.destroyAllWindows()
+
 
 # not needed, can erase, may come in handy for compiling test image folder
 # identified recyable classes below
@@ -90,6 +134,9 @@ best_class_name = class_names[best_class_idx]
 # 'recreational_vehicle', 'reel', 'reflex_camera'
 # ]
 
+# gpt API, not needed currently so commented as to not waste money
+"""
+
 os.environ["OPENAI_API_KEY"] = "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"
 openai.api_key = os.getenv("OPENAI_API_KEY")
 # all models down below
@@ -113,5 +160,5 @@ assistant_response = response.choices[0].message.content.strip()
 # Print the assistant's response
 print(best_class_name + ": " + assistant_response)
 
-
+"""
 
