@@ -2,6 +2,10 @@ from ultralytics import YOLO
 from PIL import Image
 import cv2
 import os
+import pyk4a
+from pyk4a import Config, PyK4A
+import numpy as np
+import time
 # import openai
 
 model = YOLO("yolov8x-cls.pt")
@@ -37,41 +41,98 @@ print(f'this is a {best_class_name}')
 """
 
 # **************** YOLO ON A VIDEO ****************
+# Initialize the Azure Kinect sensor
+k4a = PyK4A(
+    Config(
+        color_resolution=pyk4a.ColorResolution.RES_720P,
+        depth_mode=pyk4a.DepthMode.NFOV_UNBINNED,
+        synchronized_images_only=True,
+    )
+)
+
+# # Open the sensor with default configuration
+# k4a.open()
+
+# # Configure the color camera
+# config = Config(color_resolution=pyk4a.ColorResolution.RES_1080P)
+
+# Start the color camera
+k4a.start()
+
+# # getters and setters directly get and set on device
+# k4a.whitebalance = 4500
+# assert k4a.whitebalance == 4500
+# k4a.whitebalance = 4510
+# assert k4a.whitebalance == 4510
+
+while True:
+    capture = k4a.get_capture()
+    color_frame = capture.color
+
+    color_image = color_frame[:, :, :3].copy()
+    # color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+    
+    # Display the color frame
+    cv2.imshow('Color Frame', color_image)
+
+    # Exit the loop if 'q' is pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Stop the sensor and close the window
+k4a.stop()
+cv2.destroyAllWindows()
+
 # open a video
-cap = cv2.VideoCapture('/home/bwilab/group10_FRI_final/FRI_One_Recycle_Detection/testImages/attachments/water_bottle_vid.MOV')
+# cap = cv2.VideoCapture('/home/users/wrb2243/FRI_FinalProject/testImages/attachments/water_bottle_vid.MOV')
 
 # retrieve the frame and whether or not it was successful in retrieval
-ret, frame = cap.read()
-counter = 1  # count which frame we are on
+# ret, frame = cap.read()
+# counter = 1  # count which frame we are on
 
-framerate = 30  # frames per second of the video being read
-seconds = 3  # number of seconds between each reading
+# framerate = 30  # frames per second of the video being read
+# seconds = 1  # number of seconds between each reading
 
 # while there are frames in the video
-while ret:
-    # only read when we want too so we dont take too long
-    if counter == framerate * seconds:
-        # from list of PIL/ndarray
-        results = model.predict(source=frame)
+# while True:
+#     # from list of PIL/ndarray
+#     results = model.predict(source=color_frame)
 
-        # Find the index with the highest probability
-        best_class_idx = results[0].probs.argmax()
+#     # Find the index with the highest probability
+#     best_class_idx = results[0].probs.argmax()
 
-        # Get the class name with the highest probability
-        class_names = list(results[0].names.values())
-        best_class_name = class_names[best_class_idx]
+#     # Get the class name with the highest probability
+#     class_names = list(results[0].names.values())
+#     best_class_name = class_names[best_class_idx]
+
+#     print(f'this is a {best_class_name}')
+
+#     capture = k4a.get_capture()
+#     color_frame = capture.color
+
+#     # only read when we want too so we dont take too long
+#     # if counter == framerate * seconds:
+#     #     # from list of PIL/ndarray
+#     #     results = model.predict(source=frame)
+
+#     #     # Find the index with the highest probability
+#     #     best_class_idx = results[0].probs.argmax()
+
+#     #     # Get the class name with the highest probability
+#     #     class_names = list(results[0].names.values())
+#     #     best_class_name = class_names[best_class_idx]
     
-        # print the class name with the highest probability
-        print(f'\nThe class with the highest confidence right now is: {best_class_name}\n')
-        counter = 0  # reset the frame counter
+#     #     # print the class name with the highest probability
+#     #     print(f'\nThe class with the highest confidence right now is: {best_class_name}\n')
+#     #     counter = 0  # reset the frame counter
     
-    # retrieve next frame and bool
-    ret, frame = cap.read()
-    counter += 1  # increment counter
+#     # # retrieve next frame and bool
+#     # ret, frame = cap.read()
+#     # counter += 1  # increment counter
 
-# release the video and close all OpenCV windows
-cap.release()
-cv2.destroyAllWindows()
+# # release the video and close all OpenCV windows
+# cap.release()
+# cv2.destroyAllWindows()
 
 
 # not needed, can erase, may come in handy for compiling test image folder
