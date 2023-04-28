@@ -6,133 +6,177 @@ import pyk4a
 from pyk4a import Config, PyK4A
 import numpy as np
 import time
-# import openai
+import openai
+import os
+import glob
 
 model = YOLO("yolov8x-cls.pt")
 
-# **************** YOLO ON AN IMAGE ****************
-# accepts all formats - image/dir/Path/URL/video/PIL/ndarray. 0 for webcam
-#results = model.predict(source="0")
-#results = model.predict(source="folder", show=True) # Display preds. Accepts all YOLO predict arguments
+os.environ["OPENAI_API_KEY"] = "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"
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# uncomment this block for image
-"""
-# from PIL
-im1 = Image.open("/home/bwilab/group10_FRI_final/FRI_One_Recycle_Detection/testImages/attachments/water_bottle_img.jpg")
-# results = model.predict(source=im1, save=False)  # save plotted images
 
-# from list of PIL/ndarray
-results = model.predict(source=im1)
+def classify_image(path):
+    im1 = Image.open(path)
+    results = model.predict(source=im1)
+    # Find the index with the highest probability
+    best_class_idx = results[0].probs.argmax()
 
-# Find the index with the highest probability
-best_class_idx = results[0].probs.argmax()
+    # Get the class name with the highest probability
+    class_names = list(results[0].names.values())
+    best_class_name = class_names[best_class_idx]
 
-# Get the class name with the highest probability
-class_names = list(results[0].names.values())
-best_class_name = class_names[best_class_idx]
+    print(f'this is a {best_class_name}')
+    print(path)
+    return best_class_name
 
-print(f'this is a {best_class_name}')
 
-# print("class with highest confidence")
-# print(best_class_name)
+def ask_gpt(class_name):
+    messages = [
+        {"role": "user", "content": f"Is the object '{class_name}' recyclable or not recyclable? Please provide a one-word answer."},
+    ]
 
-# print("all classes")
-# print(class_names)
-"""
-
-# **************** YOLO ON A VIDEO ****************
-# Initialize the Azure Kinect sensor
-k4a = PyK4A(
-    Config(
-        color_resolution=pyk4a.ColorResolution.RES_720P,
-        depth_mode=pyk4a.DepthMode.NFOV_UNBINNED,
-        synchronized_images_only=True,
+    # Make a request to the OpenAI API
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0.7,
     )
-)
 
-# # Open the sensor with default configuration
-# k4a.open()
+    # Extract the assistant's response from the API response
+    assistant_response = response.choices[0].message.content.strip()
 
-# # Configure the color camera
-# config = Config(color_resolution=pyk4a.ColorResolution.RES_1080P)
+    # Print the assistant's response
+    print(class_name + ": " + assistant_response)
 
-# Start the color camera
-k4a.start()
+    return assistant_response
 
-# # getters and setters directly get and set on device
-# k4a.whitebalance = 4500
-# assert k4a.whitebalance == 4500
-# k4a.whitebalance = 4510
-# assert k4a.whitebalance == 4510
 
-while True:
-    capture = k4a.get_capture()
-    color_frame = capture.color
+def get_image_paths(folder_path):
+    # Append image files' paths into the list and return it
+    image_paths = []
 
-    color_image = color_frame[:, :, :3].copy()
-    # color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+    files = glob.glob(os.path.join(folder_path, '*'))
+
+    for file in files:
+        if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+            image_paths.append(file)
+
+    return image_paths
+
+
+def run_test():
+    total = 0
+    correct = 0
+    incorrect = []
+
+    # Runs tests on non recyclable items
+    path = '/home/bwilab/FRI_FinalProject/testImages/Garbage'
+    paths = get_image_paths(path)
+
+    for file in paths:
+        # Feed the path into YOLO, classify its image and
+        # print the output.
+
+        class_name = classify_image(file)
+
+        response = ask_gpt(class_name)
+        total += 1
+        if response == 'Not recyclable.' or response == 'Not recyclable':
+            correct += 1
+        else:
+            incorrect.append(class_name)
+
+    # Runs tests on recyclable items
+
+    path = '/home/bwilab/FRI_FinalProject/testImages/Recyclable'
+    paths = get_image_paths(path)
+
+    for file in paths:
+        class_name = classify_image(file)
+
+        response = ask_gpt(class_name)
+        total += 1
+        if response == 'Recyclable.' or response == 'Recyclable':
+            correct += 1
+        else:
+            incorrect.append(class_name)
+
+    # Prints out the data
+    # 1. Total number of correctly identified items
+    # 2. Prints out the class names it incorrectly classified.
+    print(f'total: {total}, correct: {correct}\nincorrect classes: ', end=' ')
+    for name in incorrect:
+        print(name, ' ', end=' ')
+
     
-    # Display the color frame
-    cv2.imshow('Color Frame', color_image)
+def run_kinect():
+    k4a = PyK4A(
+        Config(
+            color_resolution=pyk4a.ColorResolution.RES_720P,
+            depth_mode=pyk4a.DepthMode.NFOV_UNBINNED,
+            synchronized_images_only=True,
+        )
+    )
 
-    # Exit the loop if 'q' is pressed
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # # Open the sensor with default configuration
+    k4a.open()
 
-# Stop the sensor and close the window
-k4a.stop()
-cv2.destroyAllWindows()
+    # Configure the color camera
+    config = Config(color_resolution=pyk4a.ColorResolution.RES_1080P)
 
-# open a video
-# cap = cv2.VideoCapture('/home/users/wrb2243/FRI_FinalProject/testImages/attachments/water_bottle_vid.MOV')
+    # Start the color camera
+    k4a.start()
 
-# retrieve the frame and whether or not it was successful in retrieval
-# ret, frame = cap.read()
-# counter = 1  # count which frame we are on
+    # getters and setters directly get and set on device
+    k4a.whitebalance = 4500
+    assert k4a.whitebalance == 4500
+    k4a.whitebalance = 4510
+    assert k4a.whitebalance == 4510
 
-# framerate = 30  # frames per second of the video being read
-# seconds = 1  # number of seconds between each reading
+    start_time = time.time()
+    # flag = True
 
-# while there are frames in the video
-# while True:
-#     # from list of PIL/ndarray
-#     results = model.predict(source=color_frame)
+    while 1:
+        capture = k4a.get_capture()
+        if np.any(capture.color):
+            color_data_rgb = capture.color[:, :, :3]
 
-#     # Find the index with the highest probability
-#     best_class_idx = results[0].probs.argmax()
+            height, width = 500, 320
+            color_data_rgb_trimmed = color_data_rgb[:height, :width, :]
 
-#     # Get the class name with the highest probability
-#     class_names = list(results[0].names.values())
-#     best_class_name = class_names[best_class_idx]
+            cv2.imshow("k4a", color_data_rgb_trimmed)
 
-#     print(f'this is a {best_class_name}')
 
-#     capture = k4a.get_capture()
-#     color_frame = capture.color
+            current_time = time.time()
 
-#     # only read when we want too so we dont take too long
-#     # if counter == framerate * seconds:
-#     #     # from list of PIL/ndarray
-#     #     results = model.predict(source=frame)
+            # # We will print an output on terminal after every five seconds
+            if current_time - start_time >= 10:
+                results = model.predict(source=color_data_rgb_trimmed)
 
-#     #     # Find the index with the highest probability
-#     #     best_class_idx = results[0].probs.argmax()
+                # Find the index with the highest probability
+                best_class_idx = results[0].probs.argmax()
 
-#     #     # Get the class name with the highest probability
-#     #     class_names = list(results[0].names.values())
-#     #     best_class_name = class_names[best_class_idx]
-    
-#     #     # print the class name with the highest probability
-#     #     print(f'\nThe class with the highest confidence right now is: {best_class_name}\n')
-#     #     counter = 0  # reset the frame counter
-    
-#     # # retrieve next frame and bool
-#     # ret, frame = cap.read()
-#     # counter += 1  # increment counter
+                # Get the class name with the highest probability
+                class_names = list(results[0].names.values())
+                best_class_name = class_names[best_class_idx]
 
-# # release the video and close all OpenCV windows
-# cap.release()
-# cv2.destroyAllWindows()
+                print(f'this is a {best_class_name}')
+
+                # Reset the timings of the start time
+                start_time = current_time
+                # flag = False
+
+            key = cv2.waitKey(10)
+            if key != -1:
+                cv2.destroyAllWindows()
+                break
+    k4a.stop()
+
+
+run_test()
+run_kinect()
+
 
 
 # not needed, can erase, may come in handy for compiling test image folder
@@ -194,32 +238,106 @@ cv2.destroyAllWindows()
 # 'purse', 'quill', 'quilt', 'racer', 'racket', 'radiator', 'radio', 'radio_telescope', 'rain_barrel', 
 # 'recreational_vehicle', 'reel', 'reflex_camera'
 # ]
-
+ 
 # gpt API, not needed currently so commented as to not waste money
-"""
 
-os.environ["OPENAI_API_KEY"] = "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"
-openai.api_key = os.getenv("OPENAI_API_KEY")
-# all models down below
-# openai.Model.list()
 
-# Set the messages for the chat
-messages = [
-    {"role": "user", "content": f"Is the object '{best_class_name}' recyclable or not recyclable? Please provide a one-word answer."},
-]
 
-# Make a request to the OpenAI API
-response = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",
-    messages=messages,
-    temperature=0.7,
+# **************** YOLO ON A VIDEO ****************
+# Initialize the Azure Kinect sensor
+'''
+k4a = PyK4A(
+    Config(
+        color_resolution=pyk4a.ColorResolution.RES_720P,
+        depth_mode=pyk4a.DepthMode.NFOV_UNBINNED,
+        synchronized_images_only=True,
+    )
 )
 
-# Extract the assistant's response from the API response
-assistant_response = response.choices[0].message.content.strip()
+# # Open the sensor with default configuration
+# k4a.open()
 
-# Print the assistant's response
-print(best_class_name + ": " + assistant_response)
+# # Configure the color camera
+# config = Config(color_resolution=pyk4a.ColorResolution.RES_1080P)
 
-"""
+# Start the color camera
+k4a.start()
+
+# # getters and setters directly get and set on device
+# k4a.whitebalance = 4500
+# assert k4a.whitebalance == 4500
+# k4a.whitebalance = 4510
+# assert k4a.whitebalance == 4510
+
+while True:
+    capture = k4a.get_capture()
+    color_frame = capture.color
+
+    color_image = color_frame[:, :, :3].copy()
+    # color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+    
+    # Display the color frame
+    cv2.imshow('Color Frame', color_image)
+
+    # Exit the loop if 'q' is pressed
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Stop the sensor and close the window
+k4a.stop()
+cv2.destroyAllWindows()
+'''
+
+'''
+# open a video
+cap = cv2.VideoCapture('/home/bwilab/FRI_FinalProject/testImages/attachments/water_bottle_vid.MOV')
+
+# retrieve the frame and whether or not it was successful in retrieval
+ret, frame = cap.read()
+counter = 1  # count which frame we are on
+
+framerate = 30  # frames per second of the video being read
+seconds = 1  # number of seconds between each reading
+
+# while there are frames in the video
+while ret:
+    # from list of PIL/ndarray
+    # results = model.predict(source=color_frame)
+
+    # # Find the index with the highest probability
+    # best_class_idx = results[0].probs.argmax()
+
+    # # Get the class name with the highest probability
+    # class_names = list(results[0].names.values())
+    # best_class_name = class_names[best_class_idx]
+
+    # print(f'this is a {best_class_name}')
+
+    # capture = k4a.get_capture()
+    # color_frame = capture.color
+
+    # only read when we want too so we dont take too long
+    if counter == framerate * seconds:
+        # from list of PIL/ndarray
+        results = model.predict(source=frame)
+
+        # Find the index with the highest probability
+        best_class_idx = results[0].probs.argmax()
+
+        # Get the class name with the highest probability
+        class_names = list(results[0].names.values())
+        best_class_name = class_names[best_class_idx]
+    
+        # print the class name with the highest probability
+        print(f'\nThe class with the highest confidence right now is: {best_class_name}\n')
+        counter = 0  # reset the frame counter
+    
+    # # retrieve next frame and bool
+    ret, frame = cap.read()
+    counter += 1  # increment counter
+
+# release the video and close all OpenCV windows
+cap.release()
+cv2.destroyAllWindows()
+'''
 
